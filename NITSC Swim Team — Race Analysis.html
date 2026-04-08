@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NITSC Swim Team — Race Analysis</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0a1628;
+    --navy2: #0f2040;
+    --blue: #1a5fa8;
+    --accent: #00c4ff;
+    --accent2: #0af0c0;
+    --white: #f0f4ff;
+    --gray: #8899bb;
+    --card: rgba(255,255,255,0.04);
+    --border: rgba(255,255,255,0.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Noto Sans JP', sans-serif;
+    background: var(--navy);
+    color: var(--white);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 20% 0%, rgba(26,95,168,0.25) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 100%, rgba(0,196,255,0.1) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Wave lines */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: repeating-linear-gradient(
+      180deg,
+      transparent,
+      transparent 60px,
+      rgba(0,196,255,0.02) 60px,
+      rgba(0,196,255,0.02) 61px
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ========= LOGIN ========= */
+  #login-page {
+    position: relative;
+    z-index: 10;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+  .login-box {
+    width: 100%;
+    max-width: 400px;
+  }
+  .login-logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 13px;
+    letter-spacing: 4px;
+    color: var(--accent);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+  .login-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 48px;
+    letter-spacing: 2px;
+    line-height: 1;
+    margin-bottom: 2.5rem;
+    color: var(--white);
+  }
+  .login-title span { color: var(--accent); }
+  .form-group { margin-bottom: 1.25rem; }
+  .form-label {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--gray);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+  .form-input {
+    width: 100%;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 16px;
+    color: var(--white);
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-input:focus { border-color: var(--accent); background: rgba(0,196,255,0.05); }
+  .btn-primary {
+    width: 100%;
+    background: var(--accent);
+    color: var(--navy);
+    border: none;
+    border-radius: 6px;
+    padding: 14px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    margin-top: 0.5rem;
+  }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-primary:active { transform: scale(0.98); }
+  .login-error {
+    color: #ff6b6b;
+    font-size: 13px;
+    margin-top: 12px;
+    display: none;
+  }
+
+  /* ========= APP ========= */
+  #app-page { display: none; position: relative; z-index: 10; min-height: 100vh; }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 2rem;
+    border-bottom: 1px solid var(--border);
+    background: rgba(10,22,40,0.8);
+    backdrop-filter: blur(12px);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 3px;
+    color: var(--white);
+  }
+  .header-logo span { color: var(--accent); }
+  .header-right { display: flex; align-items: center; gap: 1rem; }
+  .athlete-name { font-size: 13px; color: var(--gray); }
+  .btn-logout {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--gray);
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: 'Noto Sans JP', sans-serif;
+    transition: all 0.2s;
+  }
+  .btn-logout:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Main */
+  .main { padding: 2rem; max-width: 1100px; margin: 0 auto; }
+
+  /* Stats row */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 2rem;
+  }
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+  }
+  .stat-label { font-size: 10px; letter-spacing: 2px; color: var(--gray); text-transform: uppercase; margin-bottom: 6px; }
+  .stat-value { font-family: 'Bebas Neue', sans-serif; font-size: 32px; color: var(--accent); }
+  .stat-sub { font-size: 11px; color: var(--gray); margin-top: 2px; }
+
+  /* Filters */
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 1.5rem;
+    align-items: center;
+  }
+  .filter-select {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--white);
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+  }
+  .filter-select:focus { border-color: var(--accent); }
+  .filter-label { font-size: 11px; color: var(--gray); letter-spacing: 1px; }
+
+  /* Race list */
+  .section-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 2px;
+    color: var(--white);
+    margin-bottom: 1rem;
+  }
+  .section-title span { color: var(--accent); font-size: 14px; margin-left: 8px; font-family: 'Noto Sans JP', sans-serif; font-weight: 300; letter-spacing: 0; }
+
+  .race-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 2rem; }
+  .race-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .race-item:hover { border-color: var(--accent); background: rgba(0,196,255,0.05); }
+  .race-item.active { border-color: var(--accent); background: rgba(0,196,255,0.08); }
+  .race-info { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+  .race-meet { font-size: 14px; font-weight: 500; }
+  .race-event {
+    background: rgba(0,196,255,0.12);
+    color: var(--accent);
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+  .race-round {
+    background: rgba(255,255,255,0.06);
+    color: var(--gray);
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+  .race-date { font-size: 12px; color: var(--gray); }
+  .race-time {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 24px;
+    color: var(--accent2);
+    min-width: 80px;
+    text-align: right;
+  }
+
+  /* Analysis panel */
+  #analysis-panel { display: none; }
+  .analysis-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  .analysis-title { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 1px; }
+  .analysis-meta { font-size: 13px; color: var(--gray); margin-top: 4px; }
+
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 1.5rem;
+  }
+  .metric-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+  }
+  .metric-box-label { font-size: 10px; letter-spacing: 1px; color: var(--gray); text-transform: uppercase; margin-bottom: 4px; }
+  .metric-box-value { font-family: 'Bebas Neue', sans-serif; font-size: 28px; color: var(--white); }
+  .metric-box-unit { font-size: 11px; color: var(--gray); }
+
+  .chart-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+  }
+  .chart-card-title { font-size: 11px; letter-spacing: 2px; color: var(--gray); text-transform: uppercase; margin-bottom: 1rem; }
+  .chart-wrap { position: relative; height: 200px; }
+
+  .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .data-table th { text-align: left; padding: 8px 10px; color: var(--gray); font-weight: 400; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+  .data-table td { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--gray);
+    font-size: 14px;
+  }
+  .empty-state-icon { font-size: 40px; margin-bottom: 1rem; opacity: 0.3; }
+
+  .loading { text-align: center; padding: 2rem; color: var(--gray); font-size: 14px; }
+
+  @media (max-width: 600px) {
+    .header { padding: 1rem; }
+    .main { padding: 1rem; }
+    .race-time { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-page">
+  <div class="login-box">
+    <div class="login-logo">NITSC Swim Team</div>
+    <div class="login-title">Race<br><span>Analysis</span></div>
+    <div class="form-group">
+      <label class="form-label">メールアドレス</label>
+      <input type="email" class="form-input" id="login-email" placeholder="your@email.com">
+    </div>
+    <div class="form-group">
+      <label class="form-label">パスワード</label>
+      <input type="password" class="form-input" id="login-password" placeholder="••••••••">
+    </div>
+    <button class="btn-primary" onclick="login()">サインイン</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-page">
+  <div class="header">
+    <div class="header-logo">NITSC <span>Swim</span></div>
+    <div class="header-right">
+      <span class="athlete-name" id="athlete-name-header"></span>
+      <button class="btn-logout" onclick="logout()">サインアウト</button>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <!-- Stats -->
+    <div class="stats-row" id="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">総レース数</div>
+        <div class="stat-value" id="stat-total">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">大会数</div>
+        <div class="stat-value" id="stat-meets">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">種目数</div>
+        <div class="stat-value" id="stat-events">—</div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters">
+      <span class="filter-label">絞り込み：</span>
+      <select class="filter-select" id="filter-event" onchange="applyFilters()">
+        <option value="">すべての種目</option>
+        <option>バタフライ</option>
+        <option>背泳ぎ</option>
+        <option>平泳ぎ</option>
+        <option>自由形</option>
+        <option>個人メドレー</option>
+      </select>
+      <select class="filter-select" id="filter-distance" onchange="applyFilters()">
+        <option value="">すべての距離</option>
+        <option>50</option>
+        <option>100</option>
+        <option>200</option>
+        <option>400</option>
+        <option>800</option>
+        <option>1500</option>
+      </select>
+      <select class="filter-select" id="filter-meet" onchange="applyFilters()">
+        <option value="">すべての大会</option>
+      </select>
+    </div>
+
+    <!-- Race list -->
+    <div class="section-title">レース一覧 <span id="race-count-label"></span></div>
+    <div class="race-list" id="race-list">
+      <div class="loading">読み込み中...</div>
+    </div>
+
+    <!-- Analysis panel -->
+    <div id="analysis-panel">
+      <div class="section-title">分析結果</div>
+      <div class="analysis-header">
+        <div>
+          <div class="analysis-title" id="an-title"></div>
+          <div class="analysis-meta" id="an-meta"></div>
+        </div>
+      </div>
+
+      <div class="metrics-grid" id="an-metrics"></div>
+
+      <div class="chart-card">
+        <div class="chart-card-title">通過タイム推移</div>
+        <div class="chart-wrap"><canvas id="splitChart"></canvas></div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-card-title">ラップタイム</div>
+        <div class="chart-wrap"><canvas id="lapChart"></canvas></div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-card-title">通過タイム詳細</div>
+        <table class="data-table" id="an-split-table">
+          <thead><tr id="an-split-head"></tr></thead>
+          <tbody id="an-split-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://qshvhtlmrwlltpyykovj.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzaHZodGxtcndsbHRweXlrb3ZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2NTc1NzcsImV4cCI6MjA5MTIzMzU3N30.jjSh5sSrxxNvd-g1dIE4Vvlt82e2PlqxgmS30LPwVCk';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let allRaces = [];
+let splitChartInst = null;
+let lapChartInst = null;
+
+// ===== AUTH =====
+async function login() {
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) {
+    errEl.textContent = 'メールアドレスまたはパスワードが正しくありません';
+    errEl.style.display = 'block';
+  } else {
+    showApp();
+  }
+}
+
+async function logout() {
+  await sb.auth.signOut();
+  document.getElementById('app-page').style.display = 'none';
+  document.getElementById('login-page').style.display = 'flex';
+}
+
+document.getElementById('login-password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') login();
+});
+
+// ===== INIT =====
+async function showApp() {
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('app-page').style.display = 'block';
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return;
+
+  // Get athlete profile
+  const { data: athlete } = await sb.from('athletes').select('*').eq('user_id', user.id).single();
+  if (athlete) {
+    document.getElementById('athlete-name-header').textContent = athlete.name;
+  }
+
+  // Load races
+  const { data: races } = await sb.from('races').select('*').eq('athlete_id', athlete?.id || user.id).order('meet_date', { ascending: false });
+  allRaces = races || [];
+  renderStats();
+  renderMeetFilter();
+  renderRaceList(allRaces);
+}
+
+// Check session on load
+sb.auth.getSession().then(({ data: { session } }) => {
+  if (session) showApp();
+});
+
+// ===== STATS =====
+function renderStats() {
+  document.getElementById('stat-total').textContent = allRaces.length;
+  const meets = new Set(allRaces.map(r => r.meet_name)).size;
+  const events = new Set(allRaces.map(r => r.distance + 'm ' + r.event)).size;
+  document.getElementById('stat-meets').textContent = meets;
+  document.getElementById('stat-events').textContent = events;
+}
+
+function renderMeetFilter() {
+  const sel = document.getElementById('filter-meet');
+  const meets = [...new Set(allRaces.map(r => r.meet_name))];
+  meets.forEach(m => {
+    const opt = document.createElement('option');
+    opt.textContent = m;
+    sel.appendChild(opt);
+  });
+}
+
+// ===== FILTERS =====
+function applyFilters() {
+  const ev = document.getElementById('filter-event').value;
+  const dist = document.getElementById('filter-distance').value;
+  const meet = document.getElementById('filter-meet').value;
+  let filtered = allRaces;
+  if (ev) filtered = filtered.filter(r => r.event === ev);
+  if (dist) filtered = filtered.filter(r => String(r.distance) === dist);
+  if (meet) filtered = filtered.filter(r => r.meet_name === meet);
+  renderRaceList(filtered);
+}
+
+// ===== RACE LIST =====
+function renderRaceList(races) {
+  const el = document.getElementById('race-list');
+  document.getElementById('race-count-label').textContent = races.length + '件';
+  if (!races.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🏊</div>レースデータがありません</div>';
+    return;
+  }
+  el.innerHTML = races.map(r => {
+    const splits = r.splits || {};
+    const finalTime = splits['100'] || splits['50'] || splits['200'] || splits['400'] || splits['800'] || splits['1500'] || '—';
+    const timeStr = typeof finalTime === 'number' ? formatTime(finalTime) : finalTime;
+    return `<div class="race-item" onclick="showAnalysis('${r.id}')">
+      <div class="race-info">
+        <span class="race-meet">${r.meet_name || '—'}</span>
+        <span class="race-event">${r.distance}m ${r.event}</span>
+        <span class="race-round">${r.round || '—'}</span>
+        <span class="race-date">${r.meet_date ? r.meet_date.slice(0,10) : '—'}</span>
+      </div>
+      <div class="race-time">${timeStr}</div>
+    </div>`;
+  }).join('');
+}
+
+function formatTime(sec) {
+  if (!sec || isNaN(sec)) return '—';
+  if (sec < 60) return sec.toFixed(2);
+  const m = Math.floor(sec / 60);
+  const s = (sec % 60).toFixed(2).padStart(5, '0');
+  return m + "'" + s;
+}
+
+// ===== ANALYSIS =====
+function showAnalysis(id) {
+  document.querySelectorAll('.race-item').forEach(el => el.classList.remove('active'));
+  const race = allRaces.find(r => r.id == id);
+  if (!race) return;
+
+  // Mark active
+  const items = document.querySelectorAll('.race-item');
+  const idx = allRaces.filter(r => {
+    const ev = document.getElementById('filter-event').value;
+    const dist = document.getElementById('filter-distance').value;
+    const meet = document.getElementById('filter-meet').value;
+    if (ev && r.event !== ev) return false;
+    if (dist && String(r.distance) !== dist) return false;
+    if (meet && r.meet_name !== meet) return false;
+    return true;
+  }).findIndex(r => r.id == id);
+  if (items[idx]) items[idx].classList.add('active');
+
+  const panel = document.getElementById('analysis-panel');
+  panel.style.display = 'block';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  document.getElementById('an-title').textContent = `${race.distance}m ${race.event} — ${race.round || ''}`;
+  document.getElementById('an-meta').textContent = `${race.meet_name} | ${race.meet_date ? race.meet_date.slice(0,10) : '—'} | 組${race.heat || '—'} コース${race.lane || '—'}`;
+
+  const splits = race.splits || {};
+  const laps = race.laps || {};
+  const strokes = race.strokes || {};
+
+  // Metrics
+  const splitsArr = Object.entries(splits).sort((a,b) => Number(a[0]) - Number(b[0]));
+  const finalTime = splitsArr.length ? splitsArr[splitsArr.length-1][1] : null;
+  const rt = race.rt;
+
+  document.getElementById('an-metrics').innerHTML = `
+    <div class="metric-box"><div class="metric-box-label">最終タイム</div><div class="metric-box-value">${formatTime(finalTime)}</div><div class="metric-box-unit">秒</div></div>
+    <div class="metric-box"><div class="metric-box-label">反応時間</div><div class="metric-box-value">${rt ? rt.toFixed(2) : '—'}</div><div class="metric-box-unit">秒</div></div>
+    <div class="metric-box"><div class="metric-box-label">前半</div><div class="metric-box-value">${laps['0_50'] ? formatTime(laps['0_50']) : '—'}</div><div class="metric-box-unit">秒</div></div>
+    <div class="metric-box"><div class="metric-box-label">後半</div><div class="metric-box-value">${laps['50_100'] ? formatTime(laps['50_100']) : '—'}</div><div class="metric-box-unit">秒</div></div>
+  `;
+
+  // Split chart
+  if (splitChartInst) splitChartInst.destroy();
+  const splitLabels = splitsArr.map(([k]) => k + 'm');
+  const splitData = splitsArr.map(([,v]) => v);
+  splitChartInst = new Chart(document.getElementById('splitChart'), {
+    type: 'line',
+    data: {
+      labels: splitLabels,
+      datasets: [{
+        label: '通過タイム',
+        data: splitData,
+        borderColor: '#00c4ff',
+        backgroundColor: 'rgba(0,196,255,0.08)',
+        tension: 0.3,
+        pointRadius: 5,
+        pointBackgroundColor: '#00c4ff',
+        pointBorderColor: '#0a1628',
+        pointBorderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8899bb', font: { size: 11 } } },
+        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8899bb', font: { size: 11 } } }
+      }
+    }
+  });
+
+  // Lap chart
+  if (lapChartInst) lapChartInst.destroy();
+  const lapEntries = Object.entries(laps).sort((a,b) => {
+    const aStart = parseInt(a[0].split('_')[0]);
+    const bStart = parseInt(b[0].split('_')[0]);
+    return aStart - bStart;
+  });
+  if (lapEntries.length) {
+    const lapLabels = lapEntries.map(([k]) => k.replace('_', '-') + 'm');
+    const lapData = lapEntries.map(([,v]) => typeof v === 'number' ? parseFloat(v.toFixed(2)) : v);
+    lapChartInst = new Chart(document.getElementById('lapChart'), {
+      type: 'bar',
+      data: {
+        labels: lapLabels,
+        datasets: [{
+          label: 'ラップタイム（秒）',
+          data: lapData,
+          backgroundColor: 'rgba(10,240,192,0.25)',
+          borderColor: '#0af0c0',
+          borderWidth: 1,
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8899bb', font: { size: 11 } } },
+          y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8899bb', font: { size: 11 } }, beginAtZero: false }
+        }
+      }
+    });
+  }
+
+  // Split table
+  const thead = document.getElementById('an-split-head');
+  const tbody = document.getElementById('an-split-body');
+  thead.innerHTML = '<th>地点</th><th>通過タイム</th>';
+  tbody.innerHTML = splitsArr.map(([k, v]) =>
+    `<tr><td>${k}m</td><td>${typeof v === 'number' ? v.toFixed(2) : v}</td></tr>`
+  ).join('');
+}
+</script>
+</body>
+</html>
