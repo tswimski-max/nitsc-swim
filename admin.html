@@ -266,7 +266,7 @@
 <script>
 const SUPABASE_URL = 'https://qshvhtlmrwlltpyykovj.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzaHZodGxtcndsbHRweXlrb3ZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2NTc1NzcsImV4cCI6MjA5MTIzMzU3N30.jjSh5sSrxxNvd-g1dIE4Vvlt82e2PlqxgmS30LPwVCk';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let parsedRows = [];
 
