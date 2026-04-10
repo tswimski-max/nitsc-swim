@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NITSC Swim Team — 管理者</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0a1628;
+    --accent: #00c4ff;
+    --accent2: #0af0c0;
+    --white: #f0f4ff;
+    --gray: #8899bb;
+    --card: rgba(255,255,255,0.04);
+    --border: rgba(255,255,255,0.08);
+    --danger: #ff6b6b;
+    --success: #0af0c0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Noto Sans JP', sans-serif;
+    background: var(--navy);
+    color: var(--white);
+    min-height: 100vh;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse 80% 60% at 20% 0%, rgba(26,95,168,0.25) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* LOGIN */
+  #login-page {
+    position: relative; z-index: 10;
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 2rem;
+  }
+  .login-box { width: 100%; max-width: 400px; }
+  .login-logo { font-family: 'Bebas Neue', sans-serif; font-size: 13px; letter-spacing: 4px; color: var(--accent); margin-bottom: 8px; }
+  .login-title { font-family: 'Bebas Neue', sans-serif; font-size: 42px; letter-spacing: 2px; line-height: 1; margin-bottom: 8px; }
+  .login-subtitle { font-size: 12px; color: var(--gray); margin-bottom: 2rem; letter-spacing: 2px; }
+  .form-group { margin-bottom: 1.25rem; }
+  .form-label { display: block; font-size: 11px; letter-spacing: 2px; color: var(--gray); margin-bottom: 8px; text-transform: uppercase; }
+  .form-input {
+    width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+    border-radius: 6px; padding: 12px 16px; color: var(--white);
+    font-family: 'Noto Sans JP', sans-serif; font-size: 14px; outline: none; transition: border-color 0.2s;
+  }
+  .form-input:focus { border-color: var(--accent); }
+  .btn-primary {
+    width: 100%; background: var(--accent); color: var(--navy); border: none;
+    border-radius: 6px; padding: 14px; font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px; letter-spacing: 2px; cursor: pointer; transition: opacity 0.2s;
+  }
+  .btn-primary:hover { opacity: 0.9; }
+  .error-msg { color: var(--danger); font-size: 13px; margin-top: 12px; display: none; }
+
+  /* APP */
+  #app-page { display: none; position: relative; z-index: 10; min-height: 100vh; }
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1.25rem 2rem; border-bottom: 1px solid var(--border);
+    background: rgba(10,22,40,0.8); backdrop-filter: blur(12px);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .header-logo { font-family: 'Bebas Neue', sans-serif; font-size: 20px; letter-spacing: 3px; }
+  .header-logo span { color: var(--accent); }
+  .admin-badge {
+    background: rgba(0,196,255,0.15); color: var(--accent);
+    padding: 4px 12px; border-radius: 4px; font-size: 11px; letter-spacing: 2px;
+  }
+  .btn-logout {
+    background: transparent; border: 1px solid var(--border); color: var(--gray);
+    padding: 6px 14px; border-radius: 4px; font-size: 12px; cursor: pointer;
+    font-family: 'Noto Sans JP', sans-serif; transition: all 0.2s;
+  }
+  .btn-logout:hover { border-color: var(--accent); color: var(--accent); }
+
+  .main { padding: 2rem; max-width: 1000px; margin: 0 auto; }
+  .section-title {
+    font-family: 'Bebas Neue', sans-serif; font-size: 20px; letter-spacing: 2px;
+    margin-bottom: 1rem; color: var(--white);
+  }
+  .section-title span { color: var(--accent); font-size: 13px; font-family: 'Noto Sans JP', sans-serif; font-weight: 300; letter-spacing: 0; margin-left: 8px; }
+
+  /* Upload area */
+  .upload-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem;
+  }
+  .upload-area {
+    border: 1.5px dashed rgba(0,196,255,0.3); border-radius: 8px;
+    padding: 2.5rem; text-align: center; cursor: pointer;
+    transition: all 0.2s; margin-bottom: 1rem;
+  }
+  .upload-area:hover, .upload-area.drag-over { border-color: var(--accent); background: rgba(0,196,255,0.05); }
+  .upload-icon { font-size: 36px; margin-bottom: 12px; opacity: 0.5; }
+  .upload-text { font-size: 14px; color: var(--gray); }
+  .upload-text strong { color: var(--accent); }
+  .upload-hint { font-size: 12px; color: var(--gray); margin-top: 6px; opacity: 0.7; }
+  #file-input { display: none; }
+
+  /* Preview */
+  #preview-section { display: none; }
+  .preview-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem;
+  }
+  .preview-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 8px; }
+  .preview-info { font-size: 13px; color: var(--gray); }
+  .preview-info strong { color: var(--white); }
+  .btn-register {
+    background: var(--accent2); color: var(--navy); border: none;
+    border-radius: 6px; padding: 10px 24px; font-family: 'Bebas Neue', sans-serif;
+    font-size: 16px; letter-spacing: 2px; cursor: pointer; transition: opacity 0.2s;
+  }
+  .btn-register:hover { opacity: 0.85; }
+  .btn-register:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-cancel {
+    background: transparent; border: 1px solid var(--border); color: var(--gray);
+    border-radius: 6px; padding: 10px 18px; font-size: 13px; cursor: pointer;
+    font-family: 'Noto Sans JP', sans-serif; transition: all 0.2s; margin-right: 8px;
+  }
+  .btn-cancel:hover { border-color: var(--danger); color: var(--danger); }
+
+  .table-wrap { overflow-x: auto; }
+  .data-table { width: 100%; border-collapse: collapse; font-size: 12px; white-space: nowrap; }
+  .data-table th { text-align: left; padding: 8px 10px; color: var(--gray); font-weight: 400; font-size: 11px; letter-spacing: 1px; border-bottom: 1px solid var(--border); }
+  .data-table td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* Status */
+  .status-bar {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1rem 1.25rem;
+    margin-bottom: 1rem; font-size: 13px; display: none;
+    align-items: center; gap: 10px;
+  }
+  .status-bar.success { border-color: rgba(10,240,192,0.3); color: var(--accent2); }
+  .status-bar.error { border-color: rgba(255,107,107,0.3); color: var(--danger); }
+  .status-bar.loading { color: var(--gray); }
+
+  /* Stats */
+  .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 2rem; }
+  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; }
+  .stat-label { font-size: 10px; letter-spacing: 2px; color: var(--gray); text-transform: uppercase; margin-bottom: 6px; }
+  .stat-value { font-family: 'Bebas Neue', sans-serif; font-size: 28px; color: var(--accent); }
+
+  /* Recent uploads */
+  .race-item {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 0.875rem 1.25rem; display: flex; align-items: center;
+    justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;
+  }
+  .race-info { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .race-meet { font-size: 14px; font-weight: 500; }
+  .badge {
+    padding: 3px 10px; border-radius: 4px; font-size: 11px;
+  }
+  .badge-event { background: rgba(0,196,255,0.12); color: var(--accent); }
+  .badge-round { background: rgba(255,255,255,0.06); color: var(--gray); }
+  .race-date { font-size: 12px; color: var(--gray); }
+  .race-time { font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: var(--accent2); }
+
+  .empty-state { text-align: center; padding: 2rem; color: var(--gray); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-page">
+  <div class="login-box">
+    <div class="login-logo">NITSC Swim Team</div>
+    <div class="login-title">管理者ページ</div>
+    <div class="login-subtitle">ADMIN DASHBOARD</div>
+    <div class="form-group">
+      <label class="form-label">メールアドレス</label>
+      <input type="email" class="form-input" id="login-email" placeholder="admin@email.com">
+    </div>
+    <div class="form-group">
+      <label class="form-label">パスワード</label>
+      <input type="password" class="form-input" id="login-password">
+    </div>
+    <button class="btn-primary" onclick="login()">サインイン</button>
+    <div class="error-msg" id="login-error"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-page">
+  <div class="header">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="header-logo">NITSC <span>Swim</span></div>
+      <span class="admin-badge">ADMIN</span>
+    </div>
+    <button class="btn-logout" onclick="logout()">サインアウト</button>
+  </div>
+
+  <div class="main">
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">総レース数</div>
+        <div class="stat-value" id="stat-total">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">選手数</div>
+        <div class="stat-value" id="stat-athletes">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">大会数</div>
+        <div class="stat-value" id="stat-meets">—</div>
+      </div>
+    </div>
+
+    <!-- Upload -->
+    <div class="section-title">データアップロード</div>
+    <div class="upload-card">
+      <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click()">
+        <div class="upload-icon">📊</div>
+        <div class="upload-text"><strong>Excelファイルをドロップ</strong>またはクリックして選択</div>
+        <div class="upload-hint">50m / 100m / 200m / 400m / 800m / 1500m に対応</div>
+      </div>
+      <input type="file" id="file-input" accept=".xlsx,.xls" onchange="handleFile(event)">
+    </div>
+
+    <!-- Status -->
+    <div class="status-bar" id="status-bar"></div>
+
+    <!-- Preview -->
+    <div id="preview-section">
+      <div class="section-title">プレビュー <span id="preview-count"></span></div>
+      <div class="preview-card">
+        <div class="preview-header">
+          <div class="preview-info">ファイル: <strong id="preview-filename"></strong></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-cancel" onclick="cancelUpload()">キャンセル</button>
+            <button class="btn-register" id="register-btn" onclick="registerData()">Supabaseに登録</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table" id="preview-table">
+            <thead><tr id="preview-head"></tr></thead>
+            <tbody id="preview-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent races -->
+    <div class="section-title" style="margin-top:2rem;">登録済みレース <span id="recent-count"></span></div>
+    <div id="recent-list"><div class="empty-state">読み込み中...</div></div>
+
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://qshvhtlmrwlltpyykovj.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzaHZodGxtcndsbHRweXlrb3ZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2NTc1NzcsImV4cCI6MjA5MTIzMzU3N30.jjSh5sSrxxNvd-g1dIE4Vvlt82e2PlqxgmS30LPwVCk';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let parsedRows = [];
+
+// ===== AUTH =====
+async function login() {
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) {
+    errEl.textContent = 'メールアドレスまたはパスワードが正しくありません';
+    errEl.style.display = 'block';
+    return;
+  }
+  // Check admin role
+  const { data: { user } } = await sb.auth.getUser();
+  const { data: athlete } = await sb.from('athletes').select('role').eq('user_id', user.id).single();
+  if (!athlete || athlete.role !== 'admin') {
+    await sb.auth.signOut();
+    errEl.textContent = '管理者権限がありません';
+    errEl.style.display = 'block';
+    return;
+  }
+  showApp();
+}
+
+async function logout() {
+  await sb.auth.signOut();
+  document.getElementById('app-page').style.display = 'none';
+  document.getElementById('login-page').style.display = 'flex';
+}
+
+document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+sb.auth.getSession().then(async ({ data: { session } }) => {
+  if (session) {
+    const { data: athlete } = await sb.from('athletes').select('role').eq('user_id', session.user.id).single();
+    if (athlete?.role === 'admin') showApp();
+  }
+});
+
+// ===== APP =====
+async function showApp() {
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('app-page').style.display = 'block';
+  loadStats();
+  loadRecentRaces();
+  setupDragDrop();
+}
+
+async function loadStats() {
+  const { data: races } = await sb.from('races').select('id, meet_name, athlete_id');
+  const { data: athletes } = await sb.from('athletes').select('id').neq('role', 'admin');
+  document.getElementById('stat-total').textContent = races?.length || 0;
+  document.getElementById('stat-athletes').textContent = athletes?.length || 0;
+  const meets = new Set((races || []).map(r => r.meet_name)).size;
+  document.getElementById('stat-meets').textContent = meets;
+}
+
+async function loadRecentRaces() {
+  const { data: races } = await sb.from('races').select('*').order('created_at', { ascending: false }).limit(20);
+  const el = document.getElementById('recent-list');
+  document.getElementById('recent-count').textContent = (races?.length || 0) + '件（最新20件）';
+  if (!races?.length) { el.innerHTML = '<div class="empty-state">まだデータがありません</div>'; return; }
+  el.innerHTML = races.map(r => {
+    const splits = r.splits || {};
+    const keys = Object.keys(splits).map(Number).sort((a,b) => a-b);
+    const finalTime = keys.length ? splits[keys[keys.length-1]] : null;
+    return `<div class="race-item">
+      <div class="race-info">
+        <span class="race-meet">${r.meet_name || '—'}</span>
+        <span class="badge badge-event">${r.distance}m ${r.event}</span>
+        <span class="badge badge-round">${r.round || '—'}</span>
+        <span class="race-date">${r.meet_date || '—'}</span>
+        <span style="font-size:12px;color:var(--gray);">${r.athlete_name || ''}</span>
+      </div>
+      <div class="race-time">${finalTime ? formatTime(finalTime) : '—'}</div>
+    </div>`;
+  }).join('');
+}
+
+function formatTime(sec) {
+  if (!sec || isNaN(sec)) return '—';
+  if (sec < 60) return parseFloat(sec).toFixed(2);
+  const m = Math.floor(sec / 60);
+  const s = (sec % 60).toFixed(2).padStart(5, '0');
+  return m + "'" + s;
+}
+
+// ===== DRAG & DROP =====
+function setupDragDrop() {
+  const area = document.getElementById('upload-area');
+  area.addEventListener('dragover', e => { e.preventDefault(); area.classList.add('drag-over'); });
+  area.addEventListener('dragleave', () => area.classList.remove('drag-over'));
+  area.addEventListener('drop', e => {
+    e.preventDefault();
+    area.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) processFile(file);
+  });
+}
+
+function handleFile(event) {
+  const file = event.target.files[0];
+  if (file) processFile(file);
+}
+
+// ===== PARSE EXCEL =====
+function processFile(file) {
+  showStatus('loading', 'ファイルを読み込み中...');
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+      if (!data || data.length < 2) { showStatus('error', 'データが見つかりません'); return; }
+
+      const headers = data[0];
+      const rows = data.slice(1).filter(r => r.some(v => v !== null));
+      if (!rows.length) { showStatus('error', 'データ行がありません'); return; }
+
+      parsedRows = rows.map(row => parseRow(headers, row)).filter(r => r !== null);
+      if (!parsedRows.length) { showStatus('error', '有効なデータがありません'); return; }
+
+      showPreview(file.name, headers, rows);
+      hideStatus();
+    } catch(err) {
+      showStatus('error', 'ファイルの読み込みに失敗しました: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseRow(headers, row) {
+  const get = (key) => {
+    const idx = headers.indexOf(key);
+    return idx >= 0 ? row[idx] : null;
+  };
+
+  const name = get('氏名');
+  if (!name) return null;
+
+  // Parse splits (Time*)
+  const splits = {};
+  headers.forEach((h, i) => {
+    if (h && h.startsWith('Time')) {
+      const dist = h.replace('Time', '');
+      if (row[i] !== null && row[i] !== undefined && row[i] !== '') {
+        splits[dist] = parseFloat(row[i]);
+      }
+    }
+  });
+
+  // Parse laps (SC*)
+  const laps = {};
+  headers.forEach((h, i) => {
+    if (h && h.startsWith('SC')) {
+      if (row[i] !== null && row[i] !== undefined && row[i] !== '') {
+        laps[h.replace('SC', '')] = parseFloat(row[i]);
+      }
+    }
+  });
+
+  // Parse strokes (ST*)
+  const strokes = {};
+  headers.forEach((h, i) => {
+    if (h && h.startsWith('ST')) {
+      if (row[i] !== null && row[i] !== undefined && row[i] !== '') {
+        strokes[h.replace('ST', '')] = parseFloat(row[i]);
+      }
+    }
+  });
+
+  // Date handling
+  let meetDate = get('年/月/日');
+  if (meetDate instanceof Date) {
+    meetDate = meetDate.toISOString().split('T')[0];
+  } else if (meetDate) {
+    meetDate = String(meetDate);
+  }
+
+  return {
+    athlete_name: String(name),
+    gender: get('性別(M/F)') ? String(get('性別(M/F)')) : null,
+    distance: parseInt(get('距離')) || null,
+    event: get('種目') ? String(get('種目')) : null,
+    round: get('予選/決勝') ? String(get('予選/決勝')) : null,
+    heat: get('組') ? parseInt(get('組')) : null,
+    lane: (get('コース') || get('レーン')) ? parseInt(get('コース') || get('レーン')) : null,
+    meet_name: get('大会名') ? String(get('大会名')) : null,
+    meet_date: meetDate,
+    rt: get('RT') ? parseFloat(get('RT')) : null,
+    splits,
+    laps,
+    strokes,
+  };
+}
+
+// ===== PREVIEW =====
+function showPreview(filename, headers, rows) {
+  document.getElementById('preview-section').style.display = 'block';
+  document.getElementById('preview-filename').textContent = filename;
+  document.getElementById('preview-count').textContent = parsedRows.length + '行';
+
+  // Show only key columns in preview
+  const previewCols = ['氏名', '距離', '種目', '予選/決勝', '大会名', '年/月/日', 'RT'];
+  const colIdxs = previewCols.map(c => headers.indexOf(c)).filter(i => i >= 0);
+  const colNames = colIdxs.map(i => headers[i]);
+
+  const thead = document.getElementById('preview-head');
+  const tbody = document.getElementById('preview-body');
+  thead.innerHTML = colNames.map(c => `<th>${c}</th>`).join('');
+  tbody.innerHTML = rows.slice(0, 50).map(row =>
+    `<tr>${colIdxs.map(i => `<td>${row[i] !== null && row[i] !== undefined ? (row[i] instanceof Date ? row[i].toLocaleDateString('ja-JP') : row[i]) : '—'}</td>`).join('')}</tr>`
+  ).join('');
+}
+
+function cancelUpload() {
+  parsedRows = [];
+  document.getElementById('preview-section').style.display = 'none';
+  document.getElementById('file-input').value = '';
+  hideStatus();
+}
+
+// ===== REGISTER =====
+async function registerData() {
+  if (!parsedRows.length) return;
+  const btn = document.getElementById('register-btn');
+  btn.disabled = true;
+  btn.textContent = '登録中...';
+  showStatus('loading', `${parsedRows.length}件のデータを登録中...`);
+
+  try {
+    // Get all athletes for name matching
+    const { data: athletes } = await sb.from('athletes').select('id, name');
+    const athleteMap = {};
+    (athletes || []).forEach(a => { athleteMap[a.name] = a.id; });
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const row of parsedRows) {
+      // Find or create athlete
+      let athleteId = athleteMap[row.athlete_name];
+      if (!athleteId) {
+        // Auto-create athlete record (without user_id - admin can link later)
+        const { data: newAthlete } = await sb.from('athletes').insert({
+          name: row.athlete_name,
+          gender: row.gender,
+          team: 'NITSC swim team',
+        }).select().single();
+        if (newAthlete) {
+          athleteId = newAthlete.id;
+          athleteMap[row.athlete_name] = athleteId;
+        }
+      }
+
+      const { error } = await sb.from('races').insert({
+        athlete_id: athleteId,
+        athlete_name: row.athlete_name,
+        gender: row.gender,
+        distance: row.distance,
+        event: row.event,
+        round: row.round,
+        heat: row.heat,
+        lane: row.lane,
+        meet_name: row.meet_name,
+        meet_date: row.meet_date,
+        rt: row.rt,
+        splits: row.splits,
+        laps: row.laps,
+        strokes: row.strokes,
+      });
+      if (error) errorCount++;
+      else successCount++;
+    }
+
+    if (errorCount === 0) {
+      showStatus('success', `✓ ${successCount}件のデータを登録しました！`);
+    } else {
+      showStatus('error', `${successCount}件成功、${errorCount}件失敗しました`);
+    }
+
+    cancelUpload();
+    loadStats();
+    loadRecentRaces();
+  } catch(err) {
+    showStatus('error', '登録中にエラーが発生しました: ' + err.message);
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Supabaseに登録';
+}
+
+// ===== UTILS =====
+function showStatus(type, msg) {
+  const el = document.getElementById('status-bar');
+  el.className = 'status-bar ' + type;
+  el.style.display = 'flex';
+  el.textContent = msg;
+}
+function hideStatus() {
+  document.getElementById('status-bar').style.display = 'none';
+}
+</script>
+</body>
+</html>
